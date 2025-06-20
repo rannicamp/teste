@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Sistema de Teste Supabase</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #4CAF50;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #feedback {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        #feedback.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        #feedback.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #contacts-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+        #contacts-list li {
+            background-color: #f9f9f9;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #eee;
+        }
+        #contacts-list li span {
+            flex-grow: 1;
+        }
+        #contacts-list li .delete-btn {
+            background-color: #dc3545;
+            margin-left: 10px;
+        }
+        #contacts-list li .delete-btn:hover {
+            background-color: #c82333;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Mini Sistema de Contatos Supabase</h1>
+
+        <div id="feedback" style="display: none;"></div>
+
+        <div class="form-group">
+            <label for="contact-name">Nome:</label>
+            <input type="text" id="contact-name" placeholder="Digite o nome" required>
+        </div>
+        <div class="form-group">
+            <label for="contact-phone">Telefone:</label>
+            <input type="text" id="contact-phone" placeholder="Digite o telefone">
+        </div>
+        
+        <button id="add-contact-btn">Adicionar Contato</button>
+        <button id="refresh-contacts-btn">Atualizar Lista</button>
+
+        <h2>Meus Contatos</h2>
+        <ul id="contacts-list">
+            <li>Carregando contatos...</li>
+        </ul>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        // Substitua 'SUA_URL_DO_SUPABASE' e 'SUA_CHAVE_PUBLICA_ANON'
+        const SUPABASE_URL = 'https://vhuvnutzklhskkwbpxdz.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodXZudXR6a2xoc2trd2JweGR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5MjY2NDYsImV4cCI6MjA2NTUwMjY0Nn0.VjQI3_Oy3KWWAoYF3KVB00XHeiUP5BfTxNlaC50UXeU';
+
+        let supabase = null; // Variável global para o cliente Supabase
+
+        // Funções de feedback para o usuário
+        function showFeedback(message, type = 'info') {
+            const feedbackDiv = document.getElementById('feedback');
+            feedbackDiv.textContent = message;
+            feedbackDiv.className = ''; // Limpa classes anteriores
+            feedbackDiv.classList.add(type);
+            feedbackDiv.style.display = 'block';
+            setTimeout(() => {
+                feedbackDiv.style.display = 'none';
+            }, 3000); // Esconde a mensagem após 3 segundos
+        }
+
+        // Função para inicializar o Supabase
+        function initializeSupabaseClient() {
+            try {
+                if (typeof Supabase === 'undefined') {
+                    throw new Error("Supabase SDK não carregado. Verifique a tag script do CDN.");
+                }
+                supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log("Supabase Client: Inicializado com sucesso!");
+                console.log("Supabase Client Object:", supabase);
+                console.log("Supabase .from method exists:", typeof supabase.from === 'function');
+                // Se a inicialização for bem-sucedida, carregue os contatos
+                loadContacts(); 
+            } catch (error) {
+                console.error("Erro fatal ao inicializar o cliente Supabase:", error);
+                showFeedback(`Erro de conexão: ${error.message}`, 'error');
+                supabase = null; // Garante que a variável seja nula em caso de erro
+            }
+        }
+
+        // Função para carregar contatos do Supabase
+        async function loadContacts() {
+            if (!supabase) {
+                showFeedback("Erro: Supabase não está conectado. Não foi possível carregar.", 'error');
+                return;
+            }
+
+            const contactsList = document.getElementById('contacts-list');
+            contactsList.innerHTML = '<li>Carregando contatos...</li>';
+
+            const { data, error } = await supabase
+                .from('contatos_teste') // Nome da sua tabela
+                .select('*') // Seleciona todas as colunas
+                .order('created_at', { ascending: false }); // Ordena do mais novo para o mais antigo
+
+            if (error) {
+                console.error("Erro ao carregar contatos:", error);
+                showFeedback(`Erro ao carregar contatos: ${error.message}`, 'error');
+                contactsList.innerHTML = '<li>Erro ao carregar contatos.</li>';
+                return;
+            }
+
+            if (data.length === 0) {
+                contactsList.innerHTML = '<li>Nenhum contato cadastrado ainda.</li>';
+            } else {
+                contactsList.innerHTML = '';
+                data.forEach(contact => {
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `
+                        <span><strong>${contact.nome}</strong> - ${contact.telefone || 'N/A'}</span>
+                        <button class="delete-btn" data-id="${contact.id}">Excluir</button>
+                    `;
+                    contactsList.appendChild(listItem);
+                });
+            }
+            showFeedback("Contatos carregados com sucesso!", 'success');
+        }
+
+        // Função para adicionar um novo contato ao Supabase
+        async function addContact() {
+            if (!supabase) {
+                showFeedback("Erro: Supabase não está conectado. Não foi possível adicionar.", 'error');
+                return;
+            }
+
+            const nameInput = document.getElementById('contact-name');
+            const phoneInput = document.getElementById('contact-phone');
+
+            const name = nameInput.value.trim();
+            const phone = phoneInput.value.trim();
+
+            if (!name) {
+                showFeedback("O nome é obrigatório!", 'error');
+                return;
+            }
+
+            const { error } = await supabase
+                .from('contatos_teste')
+                .insert([{ nome: name, telefone: phone }]);
+
+            if (error) {
+                console.error("Erro ao adicionar contato:", error);
+                showFeedback(`Erro ao adicionar contato: ${error.message}`, 'error');
+                return;
+            }
+
+            showFeedback("Contato adicionado com sucesso!", 'success');
+            nameInput.value = ''; // Limpa o campo
+            phoneInput.value = ''; // Limpa o campo
+            loadContacts(); // Recarrega a lista de contatos
+        }
+
+        // Função para excluir um contato do Supabase
+        async function deleteContact(contactId) {
+            if (!supabase) {
+                showFeedback("Erro: Supabase não está conectado. Não foi possível excluir.", 'error');
+                return;
+            }
+
+            if (!confirm("Tem certeza que deseja excluir este contato?")) {
+                return;
+            }
+
+            const { error } = await supabase
+                .from('contatos_teste')
+                .delete()
+                .eq('id', contactId); // Exclui onde o 'id' é igual ao 'contactId'
+
+            if (error) {
+                console.error("Erro ao excluir contato:", error);
+                showFeedback(`Erro ao excluir contato: ${error.message}`, 'error');
+                return;
+            }
+
+            showFeedback("Contato excluído com sucesso!", 'success');
+            loadContacts(); // Recarrega a lista
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            const addContactBtn = document.getElementById('add-contact-btn');
+            const refreshContactsBtn = document.getElementById('refresh-contacts-btn');
+            const contactsList = document.getElementById('contacts-list');
+
+            addContactBtn.addEventListener('click', addContact);
+            refreshContactsBtn.addEventListener('click', loadContacts);
+
+            // Listener para os botões de excluir (delegação de eventos)
+            contactsList.addEventListener('click', (event) => {
+                if (event.target.classList.contains('delete-btn')) {
+                    const contactId = event.target.dataset.id;
+                    deleteContact(contactId);
+                }
+            });
+
+            // Inicializa o cliente Supabase e carrega os contatos ao carregar o DOM
+            initializeSupabaseClient();
+        });
+
+    </script>
+
+</body>
+</html>
